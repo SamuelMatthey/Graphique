@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projection financière — 2 EPR2 + 4 Transmutex</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0d1117;color:#c8d6e5;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}
+  .wrap{width:100%;max-width:1100px;background:linear-gradient(145deg,#0d1117,#111820);border:1px solid #1a2030;border-radius:16px;padding:2rem;box-shadow:0 8px 40px rgba(0,0,0,.5);animation:fadeIn .8s ease-out}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .surtitle{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:#f9ca24;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.4rem}
+  .title{font-size:1.4rem;font-weight:700;color:#fff;margin-bottom:.35rem}
+  .subtitle{font-size:.82rem;color:#5a6a7a;margin-bottom:1.5rem;line-height:1.5}
+  .subtitle span{margin-right:.4rem}
+  .dot{color:#3a4a5a}
+  svg{width:100%;height:auto;display:block}
+  .tooltip-box{position:absolute;pointer-events:none;background:rgba(13,17,23,.95);border:1px solid #1a2030;border-radius:8px;padding:12px 16px;font-size:12px;color:#c8d6e5;white-space:nowrap;z-index:10;opacity:0;transition:opacity .15s;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+  .tooltip-box.visible{opacity:1}
+  .tt-title{font-family:'JetBrains Mono',monospace;font-weight:700;color:#fff;margin-bottom:6px;font-size:13px}
+  .tt-row{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .tt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .tt-sep{border-top:1px solid #1a2030;margin:6px 0}
+  .legend{display:flex;flex-wrap:wrap;gap:1.2rem;margin-top:1rem}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:.8rem;color:#7a8ba3}
+  .legend-color{width:14px;height:3px;border-radius:2px}
+  .chart-area{position:relative}
+  @media(max-width:768px){.wrap{padding:1.2rem;border-radius:10px}.title{font-size:1.1rem}body{padding:1rem .5rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="surtitle">Projection financière sur 80 ans — Scénario optimisé</div>
+  <div class="title">Rentabilité 2 EPR2 + 4 Transmutex au thorium</div>
+  <div class="subtitle">
+    <span>Investissement ~23 mrd CHF</span><span class="dot">•</span>
+    <span>Nouveau nucléaire ~34 TWh/an</span><span class="dot">•</span>
+    <span>Seuil de rentabilité ~2054</span><span class="dot">•</span>
+    <span>Bénéfice net +95 mrd CHF</span>
+  </div>
+  <div class="chart-area" id="chartArea">
+    <svg id="chart" viewBox="0 0 1060 440"></svg>
+    <div class="tooltip-box" id="tooltip"></div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#ff6b6b"></div>Investissement cumulé</div>
+    <div class="legend-item"><div class="legend-color" style="background:#4ecdc4"></div>Économies d'importation cumulées</div>
+    <div class="legend-item"><div class="legend-color" style="background:#a29bfe"></div>Revenus d'exportation cumulés</div>
+    <div class="legend-item"><div class="legend-color" style="background:#7bed9f;height:4px"></div>Position nette</div>
+  </div>
+</div>
+<script>
+(function(){
+// ============================================================
+// EXACT REPLICA OF generate_chart_v9.py
+// ============================================================
+const N=81; // years 0..80
+const SY=2026;
+
+// --- Model functions (identical to Python) ---
+function getConso(y){
+  if(y<=2050)return 58+(85-58)*(y-2026)/(2050-2026);
+  return 85+(95-85)*Math.min(1,(y-2050)/30);
+}
+function getHydro(y){
+  if(y<=2050)return 48+2*(y-2026)/24;
+  return 50;
+}
+function getNucEx(y){
+  let t=0;
+  if(y<2033)t+=6;else if(y<2034)t+=6*(2034-y);
+  if(y<2039)t+=8;else if(y<2040)t+=8*(2040-y);
+  if(y<2044)t+=9;else if(y<2045)t+=9*(2045-y);
+  return t;
+}
+function getRenouv(y){
+  if(y<=2026)return 9;
+  if(y<=2035)return 9+5*(y-2026)/9;
+  if(y<=2055)return 14+6*(y-2035)/20;
+  return 20;
+}
+function getPE(y){return getHydro(y)+getNucEx(y)+getRenouv(y)}
+function getCM(y){
+  let h=getHydro(y),n=getNucEx(y),r=getRenouv(y),t=h+n+r;
+  if(t===0)return 20;
+  let ra=Math.min(r,9),rn=Math.max(0,r-9);
+  let crn=y<=2040?65:y<=2055?65-30*(y-2040)/15:y<=2070?35-20*(y-2055)/15:15;
+  return(h*20+n*25+ra*12+rn*crn)/t;
+}
+function UP(mw){return mw/1000*0.85*8.76}
+function getPI(y){return 80+30*Math.min(1,Math.max(0,(y-2026)/34))}
+
+const epr2U=[{s:2038,mw:1670},{s:2040,mw:1670}];
+const tmxU=[{s:2048,mw:300},{s:2048,mw:300},{s:2050,mw:300},{s:2050,mw:300}];
+const epr2Lcoe=40,tmxLcoe=52,pxExp=90;
+const epr2Life=60,tmxLife=60; // KEY: 60 years, matching Python
+
+// Bell invest: uses index (0..80), NOT calendar year — matching Python exactly
+function bell(total,startIdx,dur){
+  let inv=new Array(N).fill(0),s=0,mid=dur/2,sig=dur/4;
+  for(let i=0;i<N;i++){
+    let t=i-startIdx;
+    if(t>=0&&t<dur){inv[i]=Math.exp(-0.5*((t-mid)/sig)**2);s+=inv[i]}
+  }
+  if(s>0)for(let i=0;i<N;i++)inv[i]=inv[i]/s*total;
+  return inv;
+}
+const ei=bell(16.5,0,15);  // EPR2: starts at index 0 (2026)
+const ti=bell(6.0,10,12);  // TMX: starts at index 10 (2036)
+
+// --- Compute cumulative arrays ---
+const years=[],cI=[],cS=[],cE=[],net=[];
+let ci=0,cs=0,ce=0;
+
+for(let i=0;i<N;i++){
+  let y=SY+i;
+  years.push(y);
+  ci+=ei[i]+ti[i];
+  cI.push(ci);
+
+  let ep=0;epr2U.forEach(u=>{if(y>=u.s){let o=y-u.s;if(o<=epr2Life)ep+=UP(u.mw)*Math.min(1,o/2)}});
+  let tp=0;tmxU.forEach(u=>{if(y>=u.s){let o=y-u.s;if(o<=tmxLife)tp+=UP(u.mw)*Math.min(1,o/2)}});
+  let nn=ep+tp,pe=getPE(y),co=getConso(y),aS=0,aE=0;
+
+  if(nn>0){
+    let pi=getPI(y),wl=nn>0?(ep*epr2Lcoe+tp*tmxLcoe)/nn:epr2Lcoe;
+    let deficit=Math.max(0,co-pe);
+    if(deficit>0){
+      let ie=Math.min(nn,deficit);aS=ie*(pi-wl)/1000;
+      let en=Math.max(0,nn-ie);if(en>0)aE=Math.max(0,en*(pxExp-wl)/1000);
+    }else{
+      aE=Math.max(0,nn*(pxExp-wl)/1000);
+    }
+    let surplus=pe+nn-co;
+    if(surplus>nn&&deficit<=0){
+      let se=pe-co;
+      if(se>0){let cm=getCM(y),p2=se*(pxExp-cm)/1000;if(p2>0)aE+=p2}
+    }
+  }
+  cs+=aS;ce+=aE;
+  cS.push(cs);cE.push(ce);net.push(cs+ce-ci);
+}
+
+// Verify: should be inv=22.5, sav=81.5, exp=35.5, net=94.5
+console.log('Final check: inv='+cI[N-1].toFixed(1)+' sav='+cS[N-1].toFixed(1)+' exp='+cE[N-1].toFixed(1)+' net='+net[N-1].toFixed(1));
+
+// ============================================================
+// SVG RENDERING
+// ============================================================
+const M={l:65,r:25,t:25,b:35},W=1060,H=440,pw=W-M.l-M.r,ph=H-M.t-M.b;
+
+// Y range
+const allV=[];cI.forEach(v=>allV.push(-v));cS.forEach(v=>allV.push(v));cE.forEach(v=>allV.push(v));net.forEach(v=>allV.push(v));
+let yMin=Math.floor(Math.min(...allV)/10)*10-5;
+let yMax=Math.ceil(Math.max(...allV)/10)*10+5;
+
+function xP(i){return M.l+i/(N-1)*pw}
+function yP(v){return M.t+(1-(v-yMin)/(yMax-yMin))*ph}
+
+const svg=document.getElementById('chart'),ns='http://www.w3.org/2000/svg';
+function el(tag,a){let e=document.createElementNS(ns,tag);for(let k in a)e.setAttribute(k,a[k]);return e}
+
+// Grid lines + Y labels
+for(let v=Math.ceil(yMin/20)*20;v<=yMax;v+=20){
+  let y=yP(v);
+  svg.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y,y2:y,stroke:'#fff',opacity:.05}));
+  let t=el('text',{x:M.l-8,y:y+4,'text-anchor':'end',fill:'#5a6a7a','font-size':10,'font-family':"'JetBrains Mono',monospace"});
+  t.textContent=(v>0?'+':v===0?'':'')+v;svg.appendChild(t);
+}
+// Zero line
+svg.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:yP(0),y2:yP(0),stroke:'#fff',opacity:.15,'stroke-dasharray':'6,4'}));
+
+// Y axis label
+let yl=el('text',{x:15,y:H/2,'text-anchor':'middle',fill:'#7a8ba3','font-size':11,'font-family':"'DM Sans',sans-serif",transform:'rotate(-90,15,'+H/2+')'});
+yl.textContent='Milliards CHF';svg.appendChild(yl);
+
+// X labels
+for(let y=2030;y<=2100;y+=10){
+  let t=el('text',{x:xP(y-SY),y:H-M.b+20,'text-anchor':'middle',fill:'#5a6a7a','font-size':10,'font-family':"'JetBrains Mono',monospace"});
+  t.textContent=y;svg.appendChild(t);
+}
+
+// --- Milestone verticals (matching PNG annotations) ---
+const milestones=[
+  {y:2033,l:'Fermeture\nBeznau',c:'#ff6b6b',dash:'3,3',lx:0,ly:-0.85},
+  {y:2038,l:'EPR2-1\nen service',c:'#7a8ba3',dash:'4,3',lx:0,ly:-0.25},
+  {y:2040,l:'EPR2-2',c:'#7a8ba3',dash:'2,3',lx:0,ly:-0.12,small:true},
+  {y:2048,l:'TMX 1-2\nen service',c:'#f9ca24',dash:'4,3',lx:0,ly:-0.5},
+  {y:2050,l:'TMX 3-4',c:'#f9ca24',dash:'2,3',lx:0,ly:-0.38,small:true},
+];
+milestones.forEach(m=>{
+  let x=xP(m.y-SY);
+  svg.appendChild(el('line',{x1:x,x2:x,y1:M.t,y2:H-M.b,stroke:m.c,opacity:m.small?.15:.25,'stroke-dasharray':m.dash}));
+  // Multi-line labels
+  let lines=m.l.split('\n');
+  let baseY=yP(yMin*m.ly);
+  lines.forEach((line,li)=>{
+    let t=el('text',{x:x,y:baseY+li*12,'text-anchor':'center',fill:m.c,opacity:m.small?.6:.7,'font-size':m.small?7:8,'font-weight':'600','font-family':"'DM Sans',sans-serif"});
+    t.textContent=line;svg.appendChild(t);
+  });
+});
+
+// --- Filled areas ---
+function areaPath(data,baseline){
+  let d='M';for(let i=0;i<N;i++)d+=(i?'L':'')+xP(i).toFixed(1)+','+yP(data[i]).toFixed(1);
+  let bv=baseline||0;
+  d+='L'+xP(N-1).toFixed(1)+','+yP(bv).toFixed(1)+'L'+xP(0).toFixed(1)+','+yP(bv).toFixed(1)+'Z';
+  return d;
+}
+// Investment fill (below zero)
+svg.appendChild(el('path',{d:areaPath(cI.map(v=>-v),0),fill:'#ff6b6b',opacity:.18}));
+// Savings fill
+svg.appendChild(el('path',{d:areaPath(cS,0),fill:'#4ecdc4',opacity:.12}));
+// Export fill
+svg.appendChild(el('path',{d:areaPath(cE,0),fill:'#a29bfe',opacity:.12}));
+// Net positive fill
+let netPosPath='';
+for(let i=0;i<N;i++){
+  if(net[i]>=0){
+    if(!netPosPath)netPosPath='M'+xP(i).toFixed(1)+','+yP(0).toFixed(1);
+    netPosPath+='L'+xP(i).toFixed(1)+','+yP(net[i]).toFixed(1);
+  }else if(netPosPath){
+    netPosPath+='L'+xP(i).toFixed(1)+','+yP(0).toFixed(1)+'Z';
+    svg.appendChild(el('path',{d:netPosPath,fill:'#7bed9f',opacity:.08}));
+    netPosPath='';
+  }
+}
+if(netPosPath){netPosPath+='L'+xP(N-1).toFixed(1)+','+yP(0).toFixed(1)+'Z';svg.appendChild(el('path',{d:netPosPath,fill:'#7bed9f',opacity:.08}))}
+// Net negative fill
+let netNegPath='';
+for(let i=0;i<N;i++){
+  if(net[i]<0){
+    if(!netNegPath)netNegPath='M'+xP(i).toFixed(1)+','+yP(0).toFixed(1);
+    netNegPath+='L'+xP(i).toFixed(1)+','+yP(net[i]).toFixed(1);
+  }else if(netNegPath){
+    netNegPath+='L'+xP(i).toFixed(1)+','+yP(0).toFixed(1)+'Z';
+    svg.appendChild(el('path',{d:netNegPath,fill:'#ff6b6b',opacity:.08}));
+    netNegPath='';
+  }
+}
+if(netNegPath){netNegPath+='L'+xP(N-1).toFixed(1)+','+yP(0).toFixed(1)+'Z';svg.appendChild(el('path',{d:netNegPath,fill:'#ff6b6b',opacity:.08}))}
+
+// --- Lines ---
+function linePath(data){let d='M';for(let i=0;i<N;i++)d+=(i?'L':'')+xP(i).toFixed(1)+','+yP(data[i]).toFixed(1);return d}
+svg.appendChild(el('path',{d:linePath(cI.map(v=>-v)),fill:'none',stroke:'#ff6b6b','stroke-width':2.2,'stroke-linejoin':'round'}));
+svg.appendChild(el('path',{d:linePath(cS),fill:'none',stroke:'#4ecdc4','stroke-width':2.2,'stroke-linejoin':'round'}));
+svg.appendChild(el('path',{d:linePath(cE),fill:'none',stroke:'#a29bfe','stroke-width':2.2,'stroke-linejoin':'round'}));
+svg.appendChild(el('path',{d:linePath(net),fill:'none',stroke:'#7bed9f','stroke-width':2.8,'stroke-linejoin':'round'}));
+
+// --- Break-even annotation ---
+let beYear=null,beIdx=0;
+for(let i=1;i<N;i++){if(net[i-1]<0&&net[i]>=0){let r=-net[i-1]/(net[i]-net[i-1]);beIdx=i-1+r;beYear=Math.round(SY+beIdx);break}}
+if(beYear){
+  let bx=xP(beIdx);
+  svg.appendChild(el('line',{x1:bx,x2:bx,y1:M.t,y2:H-M.b,stroke:'#7bed9f',opacity:.7,'stroke-dasharray':'6,4','stroke-width':1.2}));
+  // Arrow + annotation
+  let txtX=bx+20,txtY=yP(yMax*.25);
+  let t1=el('text',{x:txtX,y:txtY,fill:'#7bed9f','font-size':10,'font-weight':'bold','font-family':"'DM Sans',sans-serif"});
+  t1.textContent='Seuil de rentabilité';svg.appendChild(t1);
+  let t2=el('text',{x:txtX,y:txtY+14,fill:'#7bed9f','font-size':10,'font-weight':'bold','font-family':"'DM Sans',sans-serif"});
+  t2.textContent=beYear.toString();svg.appendChild(t2);
+  // Arrow line from text to break-even point
+  svg.appendChild(el('line',{x1:txtX-2,y1:txtY+6,x2:bx+3,y2:yP(0)-3,stroke:'#7bed9f',opacity:.5,'stroke-width':1.2,'marker-end':'url(#arrowG)'}));
+  // Arrow marker
+  let defs=document.createElementNS(ns,'defs');
+  let marker=el('marker',{id:'arrowG',markerWidth:8,markerHeight:6,refX:8,refY:3,orient:'auto'});
+  let ap=el('path',{d:'M0,0 L8,3 L0,6 Z',fill:'#7bed9f',opacity:.5});
+  marker.appendChild(ap);defs.appendChild(marker);svg.insertBefore(defs,svg.firstChild);
+}
+
+// --- Final value annotation ---
+let fx=xP(N-1)-8,fy=yP(net[N-1])+8;
+let finalTxt=el('text',{x:fx,y:fy-12,'text-anchor':'end',fill:'#7bed9f','font-size':11,'font-weight':'bold','font-family':"'JetBrains Mono',monospace"});
+finalTxt.textContent='+'+Math.round(net[N-1])+' mrd CHF';svg.appendChild(finalTxt);
+
+// ============================================================
+// INTERACTIVE HOVER
+// ============================================================
+let hL=el('line',{x1:0,x2:0,y1:M.t,y2:H-M.b,stroke:'#fff','stroke-width':1,'stroke-dasharray':'3,3',opacity:0});svg.appendChild(hL);
+const dotColors=['#ff6b6b','#4ecdc4','#a29bfe','#7bed9f'];
+const dots=dotColors.map(c=>{let d=el('circle',{r:4.5,fill:c,stroke:'#0d1117','stroke-width':1.5,opacity:0});svg.appendChild(d);return d});
+
+const tip=document.getElementById('tooltip'),ca=document.getElementById('chartArea');
+
+function show(e){
+  let r=svg.getBoundingClientRect(),mx=(e.clientX-r.left)/r.width*W;
+  let idx=Math.round((mx-M.l)/pw*(N-1));
+  if(idx<0||idx>=N){hide();return}
+  idx=Math.max(0,Math.min(N-1,idx));
+  let x=xP(idx);
+  hL.setAttribute('x1',x);hL.setAttribute('x2',x);hL.style.opacity='.2';
+
+  const vals=[
+    {v:-cI[idx],c:'#ff6b6b',l:'Investissement cumulé'},
+    {v:cS[idx],c:'#4ecdc4',l:"Économies d'importation"},
+    {v:cE[idx],c:'#a29bfe',l:"Revenus d'exportation"},
+    {v:net[idx],c:'#7bed9f',l:'Position nette'}
+  ];
+  vals.forEach((v,i)=>{
+    dots[i].setAttribute('cx',x);
+    dots[i].setAttribute('cy',yP(v.v));
+    dots[i].style.opacity='1';
+  });
+
+  let h='<div class="tt-title">'+years[idx]+'</div>';
+  vals.forEach(v=>{
+    let sign=v.v>=0?'+':'';
+    h+='<div class="tt-row"><div class="tt-dot" style="background:'+v.c+'"></div>'+v.l+': '+sign+v.v.toFixed(1)+' mrd CHF</div>';
+  });
+  tip.innerHTML=h;tip.classList.add('visible');
+
+  let tx=e.clientX-ca.getBoundingClientRect().left+15;
+  let ty=e.clientY-ca.getBoundingClientRect().top-50;
+  if(tx+250>ca.offsetWidth)tx-=280;
+  if(ty<0)ty=10;
+  tip.style.left=tx+'px';tip.style.top=ty+'px';
+}
+function hide(){
+  hL.style.opacity='0';
+  dots.forEach(d=>d.style.opacity='0');
+  tip.classList.remove('visible');
+}
+
+svg.addEventListener('mousemove',show);
+svg.addEventListener('mouseleave',hide);
+svg.addEventListener('touchmove',e=>{e.preventDefault();show(e.touches[0])},{passive:false});
+svg.addEventListener('touchend',hide);
+})();
+</script>
+</body>
+</html>
