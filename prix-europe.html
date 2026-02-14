@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prix de l'électricité en Europe — 2024/2025</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0d1117;color:#c8d6e5;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem}
+  .wrap{width:100%;max-width:1100px;background:linear-gradient(145deg,#0d1117,#111820);border:1px solid #1a2030;border-radius:16px;padding:2rem;box-shadow:0 8px 40px rgba(0,0,0,.5);animation:fadeIn .8s ease-out}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .surtitle{font-family:'JetBrains Mono',monospace;font-size:.7rem;color:#f9ca24;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.4rem}
+  .title{font-size:1.4rem;font-weight:700;color:#fff;margin-bottom:.35rem}
+  .subtitle{font-size:.82rem;color:#5a6a7a;margin-bottom:1.5rem}
+  svg{width:100%;height:auto;display:block}
+  .tooltip-box{position:absolute;pointer-events:none;background:rgba(13,17,23,.95);border:1px solid #1a2030;border-radius:8px;padding:12px 16px;font-size:12px;color:#c8d6e5;white-space:nowrap;z-index:10;opacity:0;transition:opacity .15s;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+  .tooltip-box.visible{opacity:1}
+  .tt-title{font-family:'JetBrains Mono',monospace;font-weight:700;color:#fff;margin-bottom:6px;font-size:13px}
+  .tt-row{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .tt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .tt-sep{border-top:1px solid #1a2030;margin:6px 0}
+  .legend{display:flex;flex-wrap:wrap;gap:1.2rem;margin-top:1rem}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:.8rem;color:#7a8ba3}
+  .legend-color{width:12px;height:10px;border-radius:2px}
+  .chart-area{position:relative}
+  @media(max-width:768px){.wrap{padding:1.2rem;border-radius:10px}.title{font-size:1.1rem}body{padding:1rem .5rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="surtitle">Comparaison des prix de l'électricité en Europe — 2024/2025</div>
+  <div class="title">Du prix de gros au prix final : production, industrie et ménages</div>
+  <div class="subtitle">Sources : Eurostat H1 2025, Eurelectric 2024, IEA, ElCom • Prix incluant taxes et redevances • Valeurs en EUR/MWh</div>
+  <div class="chart-area" id="chartArea">
+    <svg id="chart" viewBox="0 0 1060 480"></svg>
+    <div class="tooltip-box" id="tooltip"></div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#4ecdc4"></div>Prix de gros (wholesale)</div>
+    <div class="legend-item"><div class="legend-color" style="background:#f9ca24"></div>Prix industrie</div>
+    <div class="legend-item"><div class="legend-color" style="background:#ff6b6b"></div>Prix ménages</div>
+  </div>
+</div>
+<script>
+(function(){
+const data=[
+  {c:"Norvège",w:30,i:85,h:175},
+  {c:"Finlande",w:42,i:80,h:178},
+  {c:"Suède",w:35,i:96,h:198},
+  {c:"Espagne",w:55,i:145,h:230},
+  {c:"Pologne",w:78,i:160,h:250},
+  {c:"Autriche",w:70,i:155,h:260},
+  {c:"France",w:50,i:130,h:266},
+  {c:"Pays-Bas",w:72,i:150,h:270},
+  {c:"Suisse",w:65,i:165,h:290},
+  {c:"Italie",w:95,i:234,h:310},
+  {c:"Irlande",w:85,i:273,h:330},
+  {c:"Danemark",w:60,i:145,h:349},
+  {c:"Belgique",w:68,i:175,h:357},
+  {c:"Allemagne",w:82,i:190,h:384},
+];
+const n=data.length,chIdx=8; // Suisse
+const M={l:55,r:20,t:20,b:65},W=1060,H=480,pw=W-M.l-M.r,ph=H-M.t-M.b,YMAX=420;
+const barW=pw/n*.6;
+function xC(i){return M.l+(i+.5)*(pw/n)}
+function yP(v){return M.t+(1-v/YMAX)*ph}
+
+const svg=document.getElementById('chart'),ns='http://www.w3.org/2000/svg';
+function el(tag,a){let e=document.createElementNS(ns,tag);for(let k in a)e.setAttribute(k,a[k]);return e}
+
+// Grid
+for(let v=0;v<=YMAX;v+=50){let y=yP(v);svg.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:y,y2:y,stroke:'#fff',opacity:.04}));let t=el('text',{x:M.l-8,y:y+4,'text-anchor':'end',fill:'#5a6a7a','font-size':10,'font-family':"'JetBrains Mono',monospace"});t.textContent=v;svg.appendChild(t)}
+
+// EU avg wholesale line
+let euY=yP(82);
+svg.appendChild(el('line',{x1:M.l,x2:W-M.r,y1:euY,y2:euY,stroke:'#4ecdc4',opacity:.25,'stroke-dasharray':'6,4'}));
+let euT=el('text',{x:W-M.r-5,y:euY-6,'text-anchor':'end',fill:'#4ecdc4',opacity:.5,'font-size':9,'font-family':"'DM Sans',sans-serif"});euT.textContent='Moy. UE gros : 82 €/MWh';svg.appendChild(euT);
+
+// Bars with staggered animation
+data.forEach((d,idx)=>{
+  let x=xC(idx)-barW/2,isCH=idx===chIdx;
+  let oW=isCH?1:.75,oI=isCH?1:.75,oH=isCH?1:.75;
+  let stroke=isCH?'rgba(255,255,255,.6)':'none',sw=isCH?1.5:0;
+
+  // Wholesale segment
+  let r1=el('rect',{x:x,y:yP(d.w),width:barW,height:yP(0)-yP(d.w),fill:'#4ecdc4',opacity:oW,rx:2,stroke:stroke,'stroke-width':sw});
+  r1.style.animation=`barGrow .6s ease-out ${idx*0.06}s both`;svg.appendChild(r1);
+
+  // Industrial segment
+  let r2=el('rect',{x:x,y:yP(d.i),width:barW,height:yP(d.w)-yP(d.i),fill:'#f9ca24',opacity:oI,rx:0,stroke:stroke,'stroke-width':sw});
+  r2.style.animation=`barGrow .6s ease-out ${idx*0.06+0.15}s both`;svg.appendChild(r2);
+
+  // Household segment
+  let r3=el('rect',{x:x,y:yP(d.h),width:barW,height:yP(d.i)-yP(d.h),fill:'#ff6b6b',opacity:oH,rx:0,stroke:stroke,'stroke-width':sw});
+  r3.style.animation=`barGrow .6s ease-out ${idx*0.06+0.3}s both`;svg.appendChild(r3);
+
+  // Top rounded
+  if(sw>0){let r4=el('rect',{x:x,y:yP(d.h),width:barW,height:2,fill:'none',rx:2,stroke:stroke,'stroke-width':sw});svg.appendChild(r4)}
+
+  // Top label
+  let tl=el('text',{x:xC(idx),y:yP(d.h)-6,'text-anchor':'middle',fill:isCH?'#ff6b6b':'rgba(255,107,107,.7)','font-size':isCH?11:9,'font-weight':isCH?'bold':'normal','font-family':"'JetBrains Mono',monospace"});
+  tl.textContent=d.h+'€';svg.appendChild(tl);
+
+  // Wholesale value inside bar
+  let wl=el('text',{x:xC(idx),y:(yP(0)+yP(d.w))/2+4,'text-anchor':'middle',fill:'#0d1117','font-size':8,'font-weight':'bold','font-family':"'JetBrains Mono',monospace"});
+  wl.textContent=d.w;svg.appendChild(wl);
+
+  // Country label
+  let cl=el('text',{x:xC(idx),y:H-M.b+15,'text-anchor':'end',fill:isCH?'#fff':'#5a6a7a','font-size':isCH?11:10,'font-weight':isCH?'bold':'normal','font-family':"'DM Sans',sans-serif",transform:`rotate(-35,${xC(idx)},${H-M.b+15})`});
+  cl.textContent=d.c;svg.appendChild(cl);
+});
+
+// CSS animation
+let style=document.createElement('style');
+style.textContent='@keyframes barGrow{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}';
+document.head.appendChild(style);
+
+// Hover zones
+const tip=document.getElementById('tooltip'),ca=document.getElementById('chartArea');
+data.forEach((d,idx)=>{
+  let x=xC(idx)-pw/n/2,w2=pw/n;
+  let zone=el('rect',{x:x,y:M.t,width:w2,height:ph,fill:'transparent',cursor:'pointer'});
+  zone.addEventListener('mouseenter',e=>{
+    let h='<div class="tt-title">'+d.c+'</div>';
+    h+='<div class="tt-row"><div class="tt-dot" style="background:#4ecdc4"></div>Prix de gros : '+d.w+' €/MWh</div>';
+    h+='<div class="tt-row"><div class="tt-dot" style="background:#f9ca24"></div>Prix industrie : '+d.i+' €/MWh</div>';
+    h+='<div class="tt-row"><div class="tt-dot" style="background:#ff6b6b"></div>Prix ménages : '+d.h+' €/MWh</div>';
+    h+='<div class="tt-sep"></div><div class="tt-row">Marge gros→ménages : +'+(d.h-d.w)+' €/MWh</div>';
+    tip.innerHTML=h;tip.classList.add('visible');
+  });
+  zone.addEventListener('mousemove',e=>{
+    let tx=e.clientX-ca.getBoundingClientRect().left+15,ty=e.clientY-ca.getBoundingClientRect().top-80;
+    if(tx+220>ca.offsetWidth)tx-=250;tip.style.left=tx+'px';tip.style.top=Math.max(0,ty)+'px';
+  });
+  zone.addEventListener('mouseleave',()=>tip.classList.remove('visible'));
+  svg.appendChild(zone);
+});
+})();
+</script>
+</body>
+</html>
